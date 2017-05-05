@@ -107,6 +107,7 @@ struct element_node
     attribute_node Attributes[MAX_ATTRIBUTES];
     size_t AttributeCount;
 
+    element_node *Next;
     element_node *FirstChild; // NOTE(joe): This list should be in order.
 };
 
@@ -116,6 +117,24 @@ element_node * PushElement()
     element_node *Result = (element_node *)calloc(1, sizeof(element_node));
 
     return Result;
+}
+
+static void AddChildElementTo(element_node *Parent, element_node *Element)
+{
+    if (!Parent->FirstChild)
+    {
+        Parent->FirstChild = Element;
+    }
+    else
+    {
+        element_node *Current = Parent->FirstChild;
+        for (; Current->Next; Current = Current->Next)
+        {
+            // Empty
+        }
+
+        Current->Next = Element;
+    }
 }
 
 attribute_node * PushAttribute()
@@ -184,7 +203,7 @@ static parser_cursor * GetCurrentCursor(parser *Parser)
 
 static parser_cursor * PushAndGetCurrentCursor(parser *Parser, parse_state State, element_node *Element)
 {
-    parser_cursor *Cursor = Parser->Cursors + Parser->CurrentIndex++;
+    parser_cursor *Cursor = Parser->Cursors + ++Parser->CurrentIndex;
     Cursor->State = State;
     Cursor->Element = Element;
 
@@ -275,7 +294,17 @@ static parse_op_result OnParseBeginElement(parser *Parser, char *Sym, parser_cur
     {
         if (*Sym == '<')
         {
-            Cursor->Element = PushElement();
+            if (!Cursor->Element)
+            {
+                Cursor->Element = PushElement();
+            }
+            else
+            {
+                element_node *Parent = Cursor->Element;
+                element_node *Element = PushElement();
+                AddChildElementTo(Parent, Element);
+                Cursor = PushAndGetCurrentCursor(Parser, Cursor->State, Element);
+            }
 
             ++Sym;
             while (Sym && *Sym != ' ' && *Sym != '>')
@@ -334,7 +363,10 @@ static parse_op_result OnParseResumeBeginElement(parser *Parser, char *Sym, pars
         }
         else if (*Sym == '/' && (Sym+1) && *(Sym+1) == '>')
         {
-             // TODO(joe): I think we'll need to pop the the current element's parent here.
+            // NOTE(joe): />
+            //            |-^
+            Sym += 2;
+            Cursor = PopAndGetCurrentCursor(Parser);
         }
         else
         {
@@ -351,20 +383,67 @@ static parse_op_result OnParseElementValue(parser *Parser, char *Sym, parser_cur
 {
     if (*Sym == '<' && (Sym+1) && *(Sym+1) == '/')
     {
-        // TODO(joe): ParseElementEnd
+        SetCurrentState(Parser, ParseEndElement);
     }
     else if (*Sym == '<' && (Sym+1) && *(Sym+1) == '!')
     {
-        // TODO(joe): <![CDATA...
+        char Buffer[5000000]; // TODO(joe): ~5MB. Count, Alloc, MemCopy?
+        size_t Size = 0;
+        // NOTE(joe): <![CDATA[...]]!> is assumed for now.
+        //            |--------^
+        Sym += 9;
+        while (Sym && *Sym != ']')
+        {
+            Buffer[Size++] = *Sym;
+            ++Sym;
+        }
+
+        Buffer[Size] = '\0';
+        Cursor->Element->Value = CopyString(Buffer, Size);
+
+        // NOTE(joe): ...]]!>
+        //               |---^
+        Sym += 4;
+        SetCurrentState(Parser, ParseEndElement);
     }
     else if (*Sym == '<')
     {
-        // TODO(joe): ParseBeginElement
+        SetCurrentState(Parser, ParseBeginElement);
     }
-    else
+    else // NOTE(joe): Simple non-CDATA value.
     {
-        // TODO(joe): ParseSimpleElementValue
+        char Buffer[2048]; // TODO(joe): Dynamically increasing buffer?
+        size_t Size = 0;
+        bool Continue = true;
+        while (Continue)
+        {
+            Buffer[Size++] = *Sym++;
+            if (*Sym == '<')
+            {
+                Continue = false;
+
+                Buffer[Size] = '\0';
+                Cursor->Element->Value = CopyString(Buffer, Size);
+
+                SetCurrentState(Parser, ParseEndElement);
+            }
+        }
     }
+
+    parse_op_result Result = {Sym, Cursor};
+    return Result;
+}
+
+static parse_op_result OnParseEndElement(parser *Parser, char *Sym, parser_cursor *Cursor)
+{
+    bool Continue = true;
+    while (*Sym != '>')
+    {
+        ++Sym;
+    }
+    ++Sym;
+
+    Cursor = PopAndGetCurrentCursor(Parser);
 
     parse_op_result Result = {Sym, Cursor};
     return Result;
@@ -462,7 +541,12 @@ static element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
                 parse_op_result Result = OnParseElementValue(Parser, Sym, Cursor);
                 Sym = Result.Sym;
                 Cursor = Result.Cursor;
-
+            } break;
+            case ParseEndElement:
+            {
+                parse_op_result Result = OnParseEndElement(Parser, Sym, Cursor);
+                Sym = Result.Sym;
+                Cursor = Result.Cursor;
             } break;
             case ParseAttribute:
             {

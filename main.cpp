@@ -244,7 +244,7 @@ static parse_op_result OnParseStart(parser *Parser, char *Sym, parser_cursor *Cu
     return Result;
 }
 
-parse_op_result OnParseProlog(parser *Parser, char *Sym, parser_cursor *Cursor)
+static parse_op_result OnParseProlog(parser *Parser, char *Sym, parser_cursor *Cursor)
 {
     while (Sym)
     {
@@ -265,7 +265,7 @@ parse_op_result OnParseProlog(parser *Parser, char *Sym, parser_cursor *Cursor)
     return Result;
 }
                 
-parse_op_result OnParseBeginElement(parser *Parser, char *Sym, parser_cursor *Cursor)
+static parse_op_result OnParseBeginElement(parser *Parser, char *Sym, parser_cursor *Cursor)
 {
     char ElementName[32] = "\0";
     size_t NameSize = 0;
@@ -322,7 +322,7 @@ parse_op_result OnParseBeginElement(parser *Parser, char *Sym, parser_cursor *Cu
     return Result;
 }
 
-parse_op_result OnParseResumeBeginElement(parser *Parser, char *Sym, parser_cursor *Cursor)
+static parse_op_result OnParseResumeBeginElement(parser *Parser, char *Sym, parser_cursor *Cursor)
 {
     while (Sym)
     {
@@ -347,7 +347,30 @@ parse_op_result OnParseResumeBeginElement(parser *Parser, char *Sym, parser_curs
     return Result;
 }
 
-parse_op_result OnParseAttribute(parser *Parser, char *Sym, parser_cursor *Cursor)
+static parse_op_result OnParseElementValue(parser *Parser, char *Sym, parser_cursor *Cursor)
+{
+    if (*Sym == '<' && (Sym+1) && *(Sym+1) == '/')
+    {
+        // TODO(joe): ParseElementEnd
+    }
+    else if (*Sym == '<' && (Sym+1) && *(Sym+1) == '!')
+    {
+        // TODO(joe): <![CDATA...
+    }
+    else if (*Sym == '<')
+    {
+        // TODO(joe): ParseBeginElement
+    }
+    else
+    {
+        // TODO(joe): ParseSimpleElementValue
+    }
+
+    parse_op_result Result = {Sym, Cursor};
+    return Result;
+}
+
+static parse_op_result OnParseAttribute(parser *Parser, char *Sym, parser_cursor *Cursor)
 {
     char Buffer[512] = "\0";
     size_t Size = 0;
@@ -433,6 +456,13 @@ static element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
                 parse_op_result Result = OnParseResumeBeginElement(Parser, Sym, Cursor);
                 Sym = Result.Sym;
                 Cursor = Result.Cursor;
+            } break;
+            case ParseElementValue:
+            {
+                parse_op_result Result = OnParseElementValue(Parser, Sym, Cursor);
+                Sym = Result.Sym;
+                Cursor = Result.Cursor;
+
             } break;
             case ParseAttribute:
             {

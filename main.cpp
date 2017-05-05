@@ -173,6 +173,47 @@ enum parse_state
     ParseAttribute,
 };
 
+char *GetStateText(parse_state State)
+{
+    switch(State)
+    {
+        case ParseError:
+        {
+            return "ParseError";
+        } break;
+        case ParseStart:
+        {
+            return "ParseStart";
+        } break;
+        case ParseProlog:
+        {
+            return "ParseProlog";
+        } break;
+        case ParseBeginElement:
+        {
+            return "ParseBeginElement";
+        } break;
+        case ParseResumeBeginElement:
+        {
+            return "ParseResumeBeginElement";
+        } break;
+        case ParseEndElement:
+        {
+            return "ParseEndElement";
+        } break;
+        case ParseElementValue:
+        {
+            return "ParseElementValue";
+        } break;
+        case ParseAttribute:
+        {
+            return "ParseAttribute";
+        } break;
+    };
+
+    return "";
+}
+
 struct parser_cursor
 {
     parse_state State;
@@ -367,6 +408,8 @@ static parse_op_result OnParseResumeBeginElement(parser *Parser, char *Sym, pars
             //            |-^
             Sym += 2;
             Cursor = PopAndGetCurrentCursor(Parser);
+            SetCurrentState(Parser, ParseBeginElement);
+            break;
         }
         else
         {
@@ -510,6 +553,13 @@ static element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
     char *Sym = AdvanceToNonWhiteSpaceChar(FeedBuffer->Data);
     while (Sym)
     {
+#if READER_DEBUG
+        if (Cursor->Element)
+        {
+            printf("Element: %s State: %s\n", Cursor->Element->Name, GetStateText(Cursor->State));
+            // TODO(joe): Print the current element's contents.
+        }
+#endif
         switch(Cursor->State)
         {
             case ParseStart:

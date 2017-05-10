@@ -7,7 +7,6 @@
 
 #include <curl/curl.h>
 
-
 #define TEST_FEED 1
 #define READER_DEBUG 0
 
@@ -673,10 +672,6 @@ static element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
     return Cursor->Element;
 }
 
-static void AddFeedToDatabase(element_node *FeedRoot)
-{
-}
-
 int main(int argc, char** argv)
 {
     feed_buffer FeedBuffer = {};
@@ -693,8 +688,6 @@ int main(int argc, char** argv)
     {
         parser Parser = {};
         element_node *FeedRoot = ParseFeed(&FeedBuffer, &Parser);
-
-        AddFeedToDatabase(FeedRoot);
     }
     else
     {

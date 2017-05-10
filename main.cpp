@@ -9,7 +9,7 @@
 
 
 #define TEST_FEED 1
-#define READER_DEBUG 1
+#define READER_DEBUG 0
 
 struct feed_buffer
 {
@@ -90,6 +90,7 @@ static void DEBUGReadFeedFromFile(feed_buffer *FeedBuffer, char *FileName)
     FeedBuffer->Valid = true;
 }
 
+
 struct attribute_node
 {
     char *Name;
@@ -134,6 +135,44 @@ static void AddChildElementTo(element_node *Parent, element_node *Element)
         }
 
         Current->Next = Element;
+    }
+}
+
+static void DEBUGPrintElement(element_node *Element)
+{
+    printf("Name: %s", Element->Name);
+    if (Element->Value)
+    {
+        printf(" -> %s\n", Element->Value);
+    }
+    printf(" Attributes\n");
+    for (size_t Index = 0; Index < Element->AttributeCount; ++Index)
+    {
+        attribute_node *Attr = Element->Attributes + Index;
+        printf("%s -> %s\n", Attr->Name, Attr->Value);
+    }
+}
+
+static void PrintElement(element_node *Root, int IndentLevel=0)
+{
+    for(int Indent = 0; Indent < IndentLevel; ++Indent)
+    {
+        printf("    ");
+    }
+
+#if 0
+    printf("%s: %s\n", Root->Name, Root->Value);
+#else
+    printf("%s\n", Root->Name);
+#endif
+    if (Root->FirstChild)
+    {
+        PrintElement(Root->FirstChild, IndentLevel+1);
+    }
+    
+    if (Root->Next)
+    {
+        PrintElement(Root->Next, IndentLevel);
     }
 }
 
@@ -253,7 +292,11 @@ static parser_cursor * PushAndGetCurrentCursor(parser *Parser, parse_state State
 
 static parser_cursor * PopAndGetCurrentCursor(parser *Parser)
 {
-    parser_cursor *Cursor = Parser->Cursors + --Parser->CurrentIndex;
+    if (Parser->CurrentIndex > 0)
+    {
+        --Parser->CurrentIndex;
+    }
+    parser_cursor *Cursor = Parser->Cursors + Parser->CurrentIndex;
     return Cursor;
 }
 
@@ -274,8 +317,6 @@ static char * AdvanceToNonWhiteSpaceChar(char *Sym)
 
     return Sym;
 }
-
-#if 1
 
 // NOTE(joe): Each state operation should assume that the symbol is already at the first character
 // that it needs to process and should leave the symbol at the first character that it has not
@@ -333,7 +374,12 @@ static parse_op_result OnParseBeginElement(parser *Parser, char *Sym, parser_cur
     bool Continue = true;
     while (Sym && Continue)
     {
-        if (*Sym == '<')
+        if (*Sym == '<' && (Sym+1) && *(Sym+1) == '/')
+        {
+            SetCurrentState(Parser, ParseEndElement);
+            Continue = false;
+        }
+        else if (*Sym == '<')
         {
             if (!Cursor->Element)
             {
@@ -435,10 +481,19 @@ static parse_op_result OnParseElementValue(parser *Parser, char *Sym, parser_cur
         // NOTE(joe): <![CDATA[...]]!> is assumed for now.
         //            |--------^
         Sym += 9;
-        while (Sym && *Sym != ']')
+
+        bool Continue = true;
+        while (Continue)
         {
-            Buffer[Size++] = *Sym;
-            ++Sym;
+            if (Sym && *Sym == ']' && (Sym+1) && *(Sym+1) == ']')
+            {
+                Continue = false;
+            }
+            else
+            {
+                Buffer[Size++] = *Sym;
+                ++Sym;
+            }
         }
 
         Buffer[Size] = '\0';
@@ -551,13 +606,13 @@ static element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
     Cursor->Element = 0;
 
     char *Sym = AdvanceToNonWhiteSpaceChar(FeedBuffer->Data);
-    while (Sym)
+    while (Sym && *Sym != '\0')
     {
 #if READER_DEBUG
         if (Cursor->Element)
         {
             printf("Element: %s State: %s\n", Cursor->Element->Name, GetStateText(Cursor->State));
-            // TODO(joe): Print the current element's contents.
+            DEBUGPrintElement(Cursor->Element);
         }
 #endif
         switch(Cursor->State)
@@ -617,247 +672,10 @@ static element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
 
     return Cursor->Element;
 }
-#else
 
-/* TODO(joe): 
- *  - Now that I'm more comfortable with how this is shaping up I think it's time to work in
- *  grabbing the data out of the xml itself. The parser can still have it's own state but the data
- *  should go into it's own set of tree nodes. 
- */
-static void ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
+static void AddFeedToDatabase(element_node *FeedRoot)
 {
-    SetCurrentState(Parser, ParseStart);
-
-    element_node *CurrentElement = 0;
-    attribute_node *CurrentAttribute = 0;
-
-    char *Sym = FeedBuffer->Data;
-    while (Sym)
-    {
-        switch (GetCurrentState(Parser))
-        {
-            case ParseStart:
-            {
-                //printf("ParseStart\n");
-                if (*Sym == '<' && (Sym+1) && *(Sym+1) == '?')
-                {
-                    SetCurrentState(Parser, ParseProlog);
-                    ++Sym;
-                }
-                else
-                {
-                    SetCurrentState(Parser, ParseBeginElement);
-                }
-            } break;
-            case ParseProlog:
-            {
-                //printf("ParseProlog\n");
-                if (*Sym == '?' && (Sym+1) && *(Sym+1) == '>')
-                {
-                    SetCurrentState(Parser, ParseBeginElement);
-                    ++Sym;
-                }
-                else if (!Sym)
-                {
-                    SetCurrentState(Parser, ParseError);
-                }
-            } break;
-            case ParseBeginElement:
-            {
-                Sym = AdvanceToNonWhiteSpaceChar(Sym);
-
-                //printf("ParseBeginElement\n");
-                char ElementName[32] = "\0";
-                size_t NameSize = 0;
-                if (*Sym == '<')
-                {
-                    CurrentElement = PushElement();
-
-                    while (++Sym && *Sym != ' ' && *Sym != '>')
-                    {
-                        ElementName[NameSize++] = *Sym;
-                    }
-                    ElementName[NameSize] = '\0';
-                    CurrentElement->Name = CopyString(ElementName);
-
-                    if (*Sym == ' ')
-                    {
-                        PushState(Parser, ParseAttributeName);
-                    }
-                    else if (*Sym == '/' && (Sym+1) && *(Sym+1) == '>')
-                    {
-
-                    }
-                    else if (*Sym == '>')
-                    {
-                        Sym = AdvanceToNonWhiteSpaceChar(++Sym);
-                        if (Sym)
-                        {
-                            if (*Sym == '<')
-                            {
-                                --Sym;
-                                SetCurrentState(Parser, ParseBeginElement);
-                            }
-                            else
-                            {
-                                --Sym;
-                                SetCurrentState(Parser, ParseElementValue);
-                            }
-                        }
-                        else
-                        {
-                            SetCurrentState(Parser, ParseError);
-                        }
-                    }
-                    printf("ElementName: %s\n", ElementName);
-                }
-                else if (Sym)
-                {
-                    if (*Sym == '>')
-                    {
-                        // TODO(joe): I wonder if it would be better to switch to grabbing the
-                        // element value here and let that code decide whether to parse a nested
-                        // element tree?
-                        Sym = AdvanceToNonWhiteSpaceChar(++Sym);
-                        if (*Sym == '<')
-                        {
-                            --Sym;
-                            SetCurrentState(Parser, ParseBeginElement);
-                        }
-                        else
-                        {
-                            --Sym;
-                            SetCurrentState(Parser, ParseElementValue);
-                        }
-                    }
-                    else if (*Sym == '/' && (Sym+1) && *(Sym+1) == '>')
-                    {
-                        Sym += 2;
-                        Sym = AdvanceToNonWhiteSpaceChar(Sym);
-                        if (*Sym == '<')
-                        {
-                            --Sym;
-                            SetCurrentState(Parser, ParseBeginElement);
-                        }
-                        else
-                        {
-                            --Sym;
-                            SetCurrentState(Parser, ParseElementValue);
-                        }                    
-                    }
-                    else
-                    {
-                        --Sym;
-                        PushState(Parser, ParseAttributeName);
-                    }
-                }
-            } break;
-            case ParseEndElement:
-            {
-                while(Sym)
-                {
-                    if (*Sym == '>')
-                    {
-                        SetCurrentState(Parser, ParseBeginElement);
-                        break;
-                    }
-                    ++Sym;
-                }
-
-                if (!Sym)
-                {
-                    SetCurrentState(Parser, ParseError);
-                }
-            } break;
-            case ParseElementValue:
-            {
-                Sym = AdvanceToNonWhiteSpaceChar(Sym);
-                char ElementValue[2048] = "\0";
-                size_t ValueSize = 0;
-                while (Sym)
-                {
-                    if (*Sym == '<' && (Sym+1) && *(Sym+1) != '!')
-                    {
-                        ElementValue[ValueSize++] = '\0';
-                        SetCurrentState(Parser, ParseEndElement);
-                        break;
-                    }
-
-                    ElementValue[ValueSize++] = *Sym;
-                    ++Sym;
-                }
-            } break;
-            case ParseAttributeName:
-            {
-                CurrentAttribute = CurrentElement->Attributes + CurrentElement->AttributeCount++;
-
-                //printf("ParseAttributeName\n");
-                char AttributeName[32] = "\0";
-                size_t NameSize = 0;
-                while (Sym)
-                {
-                    if (*Sym != '=')
-                    {
-                        AttributeName[NameSize++] = *Sym;
-                    }
-                    else if (*Sym == '=')
-                    {
-                        AttributeName[NameSize] = '\0';
-                        printf("AttributeName: %s\n", AttributeName);
-                        CurrentAttribute->Name = CopyString(AttributeName);
-                        SetCurrentState(Parser, ParseAttributeValue);
-                        break;
-                    }
-                    else
-                    {
-                        printf("Xml is in an unexpected format.\n");
-                    }
-
-                    ++Sym;
-                }
-            } break;
-            case ParseAttributeValue:
-            {
-                //printf("ParseAttributeValue\n");
-                char AttributeValue[32] = "\0";
-                size_t ValueSize = 0;
-
-                if (Sym && *Sym == '"')
-                {
-                    ++Sym;
-                    while (Sym)
-                    {
-                        if (*Sym != '"')
-                        {
-                            AttributeValue[ValueSize++] = *Sym;
-                        }
-                        else if (*Sym == '"')
-                        {
-                            AttributeValue[ValueSize] = '\0';
-                            printf("AttributeValue: %s\n", AttributeValue);
-                            CurrentAttribute->Value = CopyString(AttributeValue);
-                            CurrentAttribute = 0;
-                            PopState(Parser);
-                            break;
-                        }
-
-                        ++Sym;
-                    }
-                }
-            } break;
-            case ParseError:
-            default:
-            {
-                printf("ParseError\n");
-                printf("Xml is in an unexpected format.\n");
-                return;
-            }
-        }
-
-        ++Sym;
-    }
 }
-#endif
 
 int main(int argc, char** argv)
 {
@@ -874,7 +692,9 @@ int main(int argc, char** argv)
     if (FeedBuffer.Valid)
     {
         parser Parser = {};
-        ParseFeed(&FeedBuffer, &Parser);
+        element_node *FeedRoot = ParseFeed(&FeedBuffer, &Parser);
+
+        AddFeedToDatabase(FeedRoot);
     }
     else
     {

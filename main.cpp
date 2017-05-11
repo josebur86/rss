@@ -111,7 +111,7 @@ int main(int argc, char** argv)
     FeedBuffer.Data = (char *)calloc(FeedBuffer.MaximumSize, sizeof(char));
 
 #if TEST_FEED
-    DEBUGReadFeedFromFile(&FeedBuffer, "feed.xml");
+    DEBUGReadFeedFromFile(&FeedBuffer, "../feed.xml");
 #else
     FetchFeed(&FeedBuffer, "http://waitbutwhy.com/feed");
 #endif

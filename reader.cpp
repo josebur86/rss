@@ -1,8 +1,67 @@
 #include <assert.h>
+#include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "reader.h"
+
+#define TEST_FEED 0
+#define READER_DEBUG 0
+
+static size_t StoreFeed(char *Data, size_t Size, size_t Count, void *User)
+{
+    feed_buffer *Buffer = (feed_buffer *)User;
+    char *BufferData = Buffer->Data + Buffer->Size;
+
+    for (size_t Index = 0; Index < Count; ++Index)
+    {
+        assert(Buffer->Size < Buffer->MaximumSize);
+
+        *BufferData++ = *Data++;
+        Buffer->Size += Size;
+    }
+
+    return Size * Count;
+}
+static void FetchFeed(feed_buffer *FeedBuffer, char *URL)
+{
+    CURL *Curl = curl_easy_init();
+    if (Curl)
+    {
+        CURLcode CurlResult;
+
+#if READER_DEBUG
+        CurlResult = curl_easy_setopt(Curl, CURLOPT_VERBOSE, 1);
+        assert(CurlResult == CURLE_OK);
+#endif
+
+        CurlResult = curl_easy_setopt(Curl, CURLOPT_URL, URL);
+        assert(CurlResult == CURLE_OK);
+
+        CurlResult = curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, &StoreFeed);
+        assert(CurlResult == CURLE_OK);
+
+        CurlResult = curl_easy_setopt(Curl, CURLOPT_WRITEDATA, FeedBuffer);
+        assert(CurlResult == CURLE_OK);
+
+        CurlResult = curl_easy_perform(Curl);
+        if (CurlResult == CURLE_OK)
+        {
+            FeedBuffer->Valid = true;
+        }
+        else
+        {
+            // TODO(joe): Print the error.
+            printf("Feed fetch unsuccessful!\n");
+        }
+    }
+    else
+    {
+        printf("Curl not initialized!\n");
+    }
+
+    curl_easy_cleanup(Curl);
+}
 
 element_node * PushElement()
 {
@@ -444,12 +503,8 @@ static parse_op_result OnParseAttribute(parser *Parser, char *Sym, parser_cursor
     return Result;
 }
 
-extern "C"
-{
 
-// TODO(joe): Update this file so that this is the only symbol that is accessible.
-
-element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
+static element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
 {
     parser_cursor *Cursor = GetCurrentCursor(Parser);
     Cursor->State = ParseStart;
@@ -521,6 +576,34 @@ element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser)
     }
 
     return Cursor->Element;
+}
+
+extern "C"
+{
+
+// TODO(joe): Update this file so that this is the only symbol that is accessible.
+element_node * ParseFeed(char *FeedUrl)
+{
+    feed_buffer FeedBuffer = {};
+    FeedBuffer.MaximumSize = 1100000;
+    FeedBuffer.Data = (char *)calloc(FeedBuffer.MaximumSize, sizeof(char));
+
+    FetchFeed(&FeedBuffer, FeedUrl);
+
+    if (FeedBuffer.Valid)
+    {
+        parser Parser = {};
+        element_node *FeedRoot = ParseFeed(&FeedBuffer, &Parser);
+        return FeedRoot;
+    }
+    else
+    {
+        printf("Invalid Feed!\n");
+    }
+
+    free(FeedBuffer.Data);
+
+    return 0;
 }
 
 }

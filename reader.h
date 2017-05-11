@@ -57,6 +57,6 @@ struct feed_buffer
 extern "C"
 {
 
-element_node * ParseFeed(feed_buffer *FeedBuffer, parser *Parser);
+element_node * ParseFeed(char *FeedUrl);
 
 }

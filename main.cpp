@@ -4,33 +4,37 @@
 
 #include "reader.h"
 
-static void PrintElement(element_node *Root, int IndentLevel=0)
-{
-    for(int Indent = 0; Indent < IndentLevel; ++Indent)
-    {
-        printf("    ");
-    }
-
-#if 1
-    printf("%s: %s\n", Root->Name, Root->Value);
-#else
-    printf("%s\n", Root->Name);
-#endif
-    if (Root->FirstChild)
-    {
-        PrintElement(Root->FirstChild, IndentLevel+1);
-    }
-    
-    if (Root->Next)
-    {
-        PrintElement(Root->Next, IndentLevel);
-    }
-}
-
 int main(int argc, char** argv)
 {
     element_node *Root = ParseFeed("http://waitbutwhy.com/feed");
-    PrintElement(Root);
+
+    printf("TEST\nGetting the Channel...\n\n");
+
+    element_node *Channel = GetFirstChildWithName(Root, "channel");
+    if (Channel)
+    {
+        element_node *Title = GetFirstChildWithName(Channel, "title");
+        if (Title)
+        {
+            printf("Channel Title: %s\n", Title->Value);
+        }
+
+        element_node *Link = GetFirstChildWithName(Channel, "link");
+        if (Link)
+        {
+            printf("Channel Link: %s\n", Link->Value);
+        }
+
+        element_node *FeedLink = GetFirstChildWithName(Channel, "atom:link");
+        if (FeedLink)
+        {
+            attribute_node *HRef = GetAttributeWithName(FeedLink, "href");
+            if (HRef)
+            {
+                printf("Channel Feed Link: %s\n", HRef->Value);
+            }
+        }
+    }
 
     return 0;
 }

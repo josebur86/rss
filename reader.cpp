@@ -137,6 +137,24 @@ attribute_node * PushAttribute()
     attribute_node *Result = (attribute_node *)calloc(1, sizeof(attribute_node));
     return Result; 
 }
+
+bool AreStringsEqual(char *A, char *B)
+{
+    bool Result = true;
+
+    while(A && B && (*A != '\0') && (*B != '\0') && (*A == *B))
+    {
+        ++A;
+        ++B;
+    }
+
+    if ((*A != '\0') || (*B != '\0'))
+    {
+        Result = false;
+    }
+
+    return Result;
+}
                     
 char * CopyString(char *Source, size_t Size)
 {
@@ -660,6 +678,86 @@ element_node * ParseFeed(char *FeedUrl)
     free(FeedBuffer.Data);
 
     return 0;
+}
+
+static void VisitAttribute(attribute_node *Attribute)
+{
+    printf("%s -> %s\n", Attribute->Name, Attribute->Value);
+}
+
+static void VisitElement(element_node *Element)
+{
+    printf("%s -> %s\n", Element->Name, Element->Value);
+
+    for (int Index = 0; Index < Element->AttributeCount; ++Index)
+    {
+        VisitAttribute(Element->Attributes + Index);
+    }
+
+    if (Element->FirstChild)
+    {
+        VisitElement(Element->FirstChild);
+    }
+    
+    if (Element->Next)
+    {
+        VisitElement(Element->Next);
+    }
+}
+
+void PrintFeed(element_node *Root)
+{
+    VisitElement(Root);
+}
+
+element_node *GetFirstChildWithName(element_node *Root, char *Name)
+{
+    element_node *Result = 0;
+
+    element_node *Current = Root;
+    bool Found = false;
+    if (Current->FirstChild)
+    {
+        Current = Current->FirstChild;
+        if (AreStringsEqual(Current->Name, Name))
+        {
+            Found = true;
+        }
+        else
+        {
+            while(Current->Next && !Found)
+            {
+                Current = Current->Next;
+                if (AreStringsEqual(Current->Name, Name))
+                {
+                    Found = true;
+                }
+            }
+        }
+    }
+
+    if (Found)
+    {
+        Result = Current;
+    }
+
+    return Result;
+}
+
+attribute_node *GetAttributeWithName(element_node *Element, char *Name)
+{
+    attribute_node *Result = 0;
+    for (int Index = 0; Index < Element->AttributeCount; ++Index)
+    {
+        attribute_node *Current = Element->Attributes + Index;
+        if (AreStringsEqual(Current->Name, Name))
+        {
+            Result = Current;
+            break;
+        }
+    }
+
+    return Result;
 }
 
 }

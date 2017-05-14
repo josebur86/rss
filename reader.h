@@ -36,4 +36,12 @@ extern "C"
 
 element_node * ParseFeed(char *FeedUrl);
 
+//
+// Temporary
+//
+
+void PrintFeed(element_node *Root);
+element_node *GetFirstChildWithName(element_node *Root, char *Name);
+attribute_node *GetAttributeWithName(element_node *Element, char *Name);
+
 }

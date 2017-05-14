@@ -6,6 +6,7 @@
 
 #include "reader.h"
 
+#if 0
 static void DEBUGReadFeedFromFile(feed_buffer *FeedBuffer, char *FileName)
 {
     struct stat Stat = {};
@@ -20,6 +21,7 @@ static void DEBUGReadFeedFromFile(feed_buffer *FeedBuffer, char *FileName)
     FeedBuffer->MaximumSize = FileSize;
     FeedBuffer->Valid = true;
 }
+#endif
 
 static void PrintElement(element_node *Root, int IndentLevel=0)
 {

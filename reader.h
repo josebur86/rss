@@ -1,5 +1,15 @@
 #pragma once
 
+/* TODO(joe): At the moment, this interface just returns a raw representation of the xml document
+ * without any nice way to access the data. I want to change the interface to return the actual
+ * types that the consumer will want to work with (i.e. channel object, list of items and their
+ * attributes, etc).
+ *
+ * - Internally, I'll need nicer ways of getting at the data
+ *   - Visitor functions?
+ * - Replace ParseFeed return type of element_node with feed object.
+ */
+
 struct attribute_node
 {
     char *Name;
@@ -19,39 +29,6 @@ struct element_node
 
     element_node *Next;
     element_node *FirstChild; // NOTE(joe): This list should be in order.
-};
-
-enum parse_state
-{
-    ParseError = 0,
-    ParseStart,
-    ParseProlog,
-    ParseBeginElement,
-    ParseResumeBeginElement,
-    ParseEndElement,
-    ParseElementValue,
-    ParseAttribute,
-};
-
-struct parser_cursor
-{
-    parse_state State;
-    element_node *Element;
-};
-
-struct parser
-{
-    int CurrentIndex;
-    parser_cursor Cursors[256];
-};
-
-struct feed_buffer
-{
-    bool Valid;
-
-    char *Data;
-    size_t Size;
-    size_t MaximumSize;
 };
 
 extern "C"

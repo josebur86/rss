@@ -8,6 +8,15 @@
 #define TEST_FEED 0
 #define READER_DEBUG 0
 
+struct feed_buffer
+{
+    bool Valid;
+
+    char *Data;
+    size_t Size;
+    size_t MaximumSize;
+};
+
 static size_t StoreFeed(char *Data, size_t Size, size_t Count, void *User)
 {
     feed_buffer *Buffer = (feed_buffer *)User;
@@ -127,6 +136,30 @@ char * CopyString(char *Source, size_t Size)
 
     return Result;
 }
+
+enum parse_state
+{
+    ParseError = 0,
+    ParseStart,
+    ParseProlog,
+    ParseBeginElement,
+    ParseResumeBeginElement,
+    ParseEndElement,
+    ParseElementValue,
+    ParseAttribute,
+};
+
+struct parser_cursor
+{
+    parse_state State;
+    element_node *Element;
+};
+
+struct parser
+{
+    int CurrentIndex;
+    parser_cursor Cursors[256];
+};
 
 char *GetStateText(parse_state State)
 {

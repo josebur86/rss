@@ -1,27 +1,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 #include "reader.h"
-
-#if 0
-static void DEBUGReadFeedFromFile(feed_buffer *FeedBuffer, char *FileName)
-{
-    struct stat Stat = {};
-    stat(FileName, &Stat);
-    int FileSize = Stat.st_size;
-
-    FILE *File = fopen(FileName, "r");
-    fread(FeedBuffer->Data, sizeof(char), FileSize, File);
-    fclose(File);
-
-    FeedBuffer->Size = FileSize;
-    FeedBuffer->MaximumSize = FileSize;
-    FeedBuffer->Valid = true;
-}
-#endif
 
 static void PrintElement(element_node *Root, int IndentLevel=0)
 {

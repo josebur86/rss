@@ -2,10 +2,12 @@
 #include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "reader.h"
 
-#define TEST_FEED 0
+#define TEST_FEED 1
 #define READER_DEBUG 0
 
 struct feed_buffer
@@ -16,6 +18,23 @@ struct feed_buffer
     size_t Size;
     size_t MaximumSize;
 };
+
+#if TEST_FEED
+static void DEBUGReadFeedFromFile(feed_buffer *FeedBuffer, char *FileName)
+{
+    struct stat Stat = {};
+    stat(FileName, &Stat);
+    int FileSize = Stat.st_size;
+
+    FILE *File = fopen(FileName, "r");
+    fread(FeedBuffer->Data, sizeof(char), FileSize, File);
+    fclose(File);
+
+    FeedBuffer->Size = FileSize;
+    FeedBuffer->MaximumSize = FileSize;
+    FeedBuffer->Valid = true;
+}
+#endif
 
 static size_t StoreFeed(char *Data, size_t Size, size_t Count, void *User)
 {
@@ -621,7 +640,11 @@ element_node * ParseFeed(char *FeedUrl)
     FeedBuffer.MaximumSize = 1100000;
     FeedBuffer.Data = (char *)calloc(FeedBuffer.MaximumSize, sizeof(char));
 
+#if TEST_FEED
+    DEBUGReadFeedFromFile(&FeedBuffer, "feed.xml");
+#else
     FetchFeed(&FeedBuffer, FeedUrl);
+#endif
 
     if (FeedBuffer.Valid)
     {
@@ -640,5 +663,4 @@ element_node * ParseFeed(char *FeedUrl)
 }
 
 }
-
 
